@@ -1,75 +1,90 @@
 import { User } from "../models/user.js";
+import bcrypt from "bcrypt";
+import { sendCookie } from "../utils/features.js";
 
-export const getAllUsers = async(req,res)=>{
+import ErrorHandler from "../middlewares/error.js";
 
-    const users = await User.find({});
-    const keyword = req.query.keyword;
-    console.log(keyword);
 
-    res.json({
-        "success":true,
-        "users": users,
-    });
-};
+export const login = async( req,res,next)=>{
+    try{
 
-export const register = async(req,res, )=>{
-
-    const {name, email, password} = req.body;
-
-     await User.create({
-        name,
-        email,
-        password,
-    });
-    res.status(201).cookie("tempi","lol").json({
-        "success":true,
-        "message" : "Registered Succefully",
-    });
-};
-
-export const specialFunc =(req,res)=>{
-
-    res.json({
-        success:true,
-        message:"Just Joking",
-    });
-
-};
-
-export const getUserDetails =  async(req,res)=>{
-    const id = req.params.id;
-    const user = await User.findById(id);   
+        const{email,password} = req.body;
+    const user = await User.findOne({email}).select("+password");
     
 
-    res.json({
-        success:true,
-        user,
-    });
+    if(!user) return next(new ErrorHandler("Invalid Email or Password",400));                    /* if(!user){
+                                                                                                        return res.status(404).json({
+                                                                                                            success : false,
+                                                                                                            message : "Invalid Email or Password",
+                                                                                                        });
+                                                                                                */
+    const isMatch = await bcrypt.compare(password,user.password); 
+    if(!isMatch) return next(new ErrorHandler("Invalid Email or Password",400));                    
+    sendCookie(user, res, `Welcome Back, ${user.name}`, 200);
+    }
+    catch(error){
+        next(error);
+        
+    }
+
+    
+
+};
+
+export const register = async(req,res,next )=>{
+
+    try{
+        const {name, email, password} = req.body;
+
+        let user = await User.findOne({email});
+    
+        if(user) return next(new ErrorHandler("User Already Exist",400));                             
+        const hashedPassword = await bcrypt.hash(password,10);
+    
+    
+       user = await User.create({name,email,password:hashedPassword});
+    
+        sendCookie(user,res,"Registered Successfully",201);
+
+    }
+    catch(error){
+        next(error);
+        
+    }
+  
+
+};
+
+
+export const getmyprofile =  async(req,res)=>{
+    
+        res.status(200).json({
+            success:true,
+            user: req.user,
+        });
+
+  
   
 };
 
-export const updateUser =  async(req,res)=>{
-    const id = req.params.id;
-    const user = await User.findById(id);   
-    console.log(req.params);
 
+export const logout =  async(req,res)=>{
+    
+        res.status(200).cookie("token","",{
+            expires:new Date(Date.now()),
+            sameSite: process.env.NODE_ENV ==="Development"?"lax":"none",            //as our backend url and frontend url will differents so to use in postman we will do it lax and to use in browser we use "none"
+            secure:process.env.NODE_ENV ==="Development"? false : true,            //or the cookiwe will be blocke dif we do not do this so to use in postman we will do it "false" and to use in browser we use "true"
+                                                                                   // if we do sameSite:"strict" then the front and backend url should be same no matter you use cors
+})
+        
+        
+        .json({
+            success:true,
+            user: req.user,
+        });
 
-    res.json({
-        success:true,
-        message:"Updated"
-    });
-  
-};
-
-export const deleteUser =  async(req,res)=>{
-    const id = req.params.id;
-    const user = await User.findById(id);   
-   
-   
-
-    res.json({
-        success:true,
-        message:"Deleted",
-    });
+    
+    
+    
   
 };
